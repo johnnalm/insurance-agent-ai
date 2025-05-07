@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --highlight-yellow: 45 93% 47%;
+    --highlight-purple: 250 95% 64%;
+    --highlight-blue: 213 94% 68%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+
+    --radius: 1rem;
+
+    --addition: 142.1 76.2% 36.3%;
+    --deletion: 0 84.2% 60.2%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --highlight-yellow: 45 93% 47%;
+    --highlight-purple: 250 95% 64%;
+    --highlight-blue: 213 94% 68%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-medium tracking-tight;
+  }
+}
+
+.bubble {
+  position: relative;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.1) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  border-radius: 50%;
+}
+
+.bubble-yellow {
+  background-color: hsl(var(--highlight-yellow));
+  color: #000;
+}
+
+.bubble-purple {
+  background-color: hsl(var(--highlight-purple));
+  color: white;
+}
+
+.bubble-blue {
+  background-color: hsl(var(--highlight-blue));
+  color: white;
+}
+
+.card-yellow {
+  background-color: hsl(var(--highlight-yellow));
+  color: #000;
+}
+
+.card-purple {
+  background-color: hsl(var(--highlight-purple));
+  color: white;
+}
+
+.card-blue {
+  background-color: hsl(var(--highlight-blue));
+  color: white;
+}
+
+.addition {
+  @apply bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300;
+}
+
+.deletion {
+  @apply bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300;
+}
+
+.policy-document {
+  @apply font-sans leading-relaxed;
+}
+
+.policy-document h1 {
+  @apply text-3xl font-bold mb-6;
+}
+
+.policy-document h2 {
+  @apply text-2xl font-semibold mb-4 mt-8;
+}
+
+.policy-document h3 {
+  @apply text-xl font-medium mb-3 mt-6;
+}
+
+.policy-document p {
+  @apply mb-4;
+}
+
+.policy-document ul,
+.policy-document ol {
+  @apply mb-4 ml-6;
+}
+
+.policy-document li {
+  @apply mb-2;
+}
+
+.policy-document table {
+  @apply w-full border-collapse mb-4;
+}
+
+.policy-document th,
+.policy-document td {
+  @apply border p-2;
+}

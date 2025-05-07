@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+pinecone
+langchain
+langchain-openai
+langchain-text-splitters
+boto3
+pypdf
+langchain-community # Para embeddings HuggingFace
+sentence-transformers # Para modelos de embeddings locales/HuggingFace
+langchain-pinecone # Nueva dependencia recomendada
+langgraph # For building the agent graph
+tavily-python # For Tavily search tool
+# Añade aquí otras dependencias (ej: langchain-ollama si usas Ollama)

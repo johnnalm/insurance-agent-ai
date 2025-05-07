@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend/insurance-policy-agent
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # This ensures Next.js app inside the container can reach the backend service.
+      # The backend service will be available at http://backend:8001
+      - FASTAPI_BACKEND_URL=http://backend:8001/api/internal/v1/answer_query
+      # The Next.js Dockerfile sets NODE_ENV=production in the final stage.
+      # Setting it here can be useful if you adapt the Dockerfile for dev, but for now it's more for clarity.
+      - NODE_ENV=development
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./policy-ai/ai-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./policy-ai/ai-service/app:/app/app
+    # If your vector store or other resources need persistent data, define volumes here.
+    # volumes:
+    #   - ./data/vector_store:/app/vector_store_data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge 
