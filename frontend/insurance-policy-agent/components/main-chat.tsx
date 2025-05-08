@@ -1,23 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Bot, User, Send, Wand2 } from "lucide-react"
+import { Bot, User, Send } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-
-interface PolicyChatProps {
-  policyTitle: string
-  isNew?: boolean
-  onApplyChanges?: (newContent: string) => void
-  initialMessage?: string
-  policyContent?: string
-}
 
 interface Message {
   id: string
@@ -26,7 +18,14 @@ interface Message {
   timestamp: Date
 }
 
-export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges, initialMessage, policyContent }: PolicyChatProps) {
+interface MainChatProps {
+  // We might add specific props later if needed
+}
+
+export default function MainChat({}: MainChatProps) {
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get("q")
+
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -39,33 +38,44 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
   }, [])
 
   useEffect(() => {
-    const welcomeMessage =
-      initialMessage ||
-      (isNew
-        ? `¡Hola! Soy tu asistente de pólizas. Estoy aquí para ayudarte a crear una nueva póliza de seguro personalizada. ¿Qué tipo de cobertura estás buscando?`
-        : `¡Hola! Soy tu asistente para la póliza "${policyTitle}". Puedo ayudarte a analizar, explicar o modificar esta póliza. ¿En qué puedo ayudarte hoy?`)
-
-    setMessages([
+    const welcomeMessageContent = "¡Hola! Soy tu asistente AI. ¿En qué puedo ayudarte hoy?"
+    let initialMessages: Message[] = [
       {
         id: "welcome",
         role: "assistant",
-        content: welcomeMessage,
+        content: welcomeMessageContent,
         timestamp: new Date(),
       },
-    ])
-  }, [policyTitle, isNew, initialMessage])
+    ]
+
+    if (initialQuery) {
+      const userQueryMessage: Message = {
+        id: `user-initial-${Date.now()}`,
+        role: "user",
+        content: initialQuery,
+        timestamp: new Date(),
+      }
+      initialMessages.push(userQueryMessage)
+      // Automatically call backend with the initial query
+      callBackendAPI(initialQuery, crypto.randomUUID()) // Pass a new threadId for the initial query
+    }
+    setMessages(initialMessages)
+  }, [initialQuery]) // Rerun when initialQuery changes
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
-
-  const callBackendAPI = async (userMessage: string) => {
-    if (!threadId) {
-      console.error("threadId not set")
+  
+  // The callBackendAPI function needs a unique thread_id for each conversation.
+  // If an initialQuery is present, we start a new conversation.
+  // For subsequent messages, we use the threadId established for this chat session.
+  const callBackendAPI = async (userMessage: string, currentThreadId: string | null) => {
+    if (!currentThreadId) {
+      console.error("threadId not set for API call")
       setMessages((prev) => [
         ...prev,
         {
-          id: `error-${Date.now()}`,
+          id: `error-config-${Date.now()}`,
           role: "assistant",
           content: "Lo siento, ocurrió un error de configuración. Por favor, recarga la página.",
           timestamp: new Date(),
@@ -84,7 +94,7 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
         },
         body: JSON.stringify({
           query: userMessage,
-          thread_id: threadId,
+          thread_id: currentThreadId, // Use the passed thread_id
         }),
       })
 
@@ -126,7 +136,6 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!input.trim()) return
 
     const newMessage: Message = {
@@ -135,95 +144,30 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
       content: input,
       timestamp: new Date(),
     }
-
     setMessages((prev) => [...prev, newMessage])
+    
+    // Ensure threadId is initialized before calling API
+    let currentThreadId = threadId;
+    if (!currentThreadId) {
+        const newThreadId = crypto.randomUUID();
+        setThreadId(newThreadId);
+        currentThreadId = newThreadId;
+    }
+
+    callBackendAPI(input, currentThreadId)
     setInput("")
-
-    callBackendAPI(input)
-  }
-
-  const handleApplyChanges = () => {
-    if (onApplyChanges) {
-      const exampleNewContent = `# Póliza de Seguro Actualizada
-
-## Sección 1: Cobertura
-
-Esta póliza cubre daños a terceros causados por las operaciones del asegurado.
-
-**Coberturas adicionales:**
-- **Cobertura por inundaciones** para instalaciones comerciales
-- **Asistencia legal 24/7** para consultas relacionadas con reclamaciones
-
-## Sección 2: Exclusiones
-
-Esta póliza no cubre:
-- Daños intencionales
-- Actos de guerra o terrorismo
-- Desastres naturales (excepto inundaciones según lo especificado)
-
-## Sección 3: Límites de Cobertura
-
-El límite máximo de cobertura es de $2,000,000 por ocurrencia.
-
-## Sección 4: Prima y Pagos
-
-La prima anual es de $5,500, pagadera en cuotas mensuales.`
-
-      onApplyChanges(exampleNewContent)
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content:
-            "✅ He aplicado los cambios sugeridos a la póliza. He añadido cobertura por inundaciones y asistencia legal 24/7, y he actualizado el límite de cobertura a $2,000,000. Revisa los cambios resaltados en el documento.",
-          timestamp: new Date(),
-        },
-      ])
-    }
-  }
-
-  const renderMessageContent = (content: string) => {
-    if (content.includes("[Puedo sugerir añadir cobertura")) {
-      const parts = content.split("[Puedo sugerir")
-      return (
-        <>
-          <ReactMarkdown 
-            remarkPlugins={[remarkGfm]}
-            components={{
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              a: ({node, ...props}: any) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline" />
-            }}
-          >{parts[0]}</ReactMarkdown>
-          <div className="mt-2">
-            <Button onClick={handleApplyChanges} className="rounded-full bg-black text-white hover:bg-black/90">
-              <Wand2 className="mr-2 h-4 w-4" />
-              Aplicar cambios sugeridos
-            </Button>
-          </div>
-        </>
-      )
-    }
-    return <ReactMarkdown 
-      remarkPlugins={[remarkGfm]}
-      components={{
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        a: ({node, ...props}: any) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline" />
-      }}
-    >{content}</ReactMarkdown>
   }
 
   return (
-    <div className="bg-white rounded-3xl border h-full flex flex-col overflow-hidden">
+    <div className="bg-white rounded-3xl border h-full flex flex-col overflow-hidden shadow-xl">
       <div className="bg-black text-white p-4">
         <h3 className="text-lg font-medium flex items-center">
           <Bot className="mr-2 h-5 w-5" />
-          Asistente de Pólizas
+          Asistente Principal
         </h3>
       </div>
 
-      <ScrollArea className="flex-grow p-4 h-[600px]">
+      <ScrollArea className="flex-grow p-4 h-[calc(100vh-250px)]"> {/* Adjusted height */}
         <div className="space-y-4">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -247,13 +191,19 @@ La prima anual es de $5,500, pagadera en cuotas mensuales.`
                 </Avatar>
                 <div>
                   <div
-                    className={`rounded-3xl px-4 py-2 text-sm ${
-                      message.role === "user" ? "bg-black text-white" : "bg-gray-100"
+                    className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                      message.role === "user" ? "bg-black text-white" : "bg-gray-100 text-gray-800"
                     }`}
                   >
-                    <div className="whitespace-pre-line">{renderMessageContent(message.content)}</div>
+                    <div className="whitespace-pre-line"><ReactMarkdown
+remarkPlugins={[remarkGfm]}
+components={{
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  a: ({node, ...props}: any) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline" />
+}}
+                    >{message.content}</ReactMarkdown></div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
+                  <div className={`text-xs text-muted-foreground mt-1.5 ${message.role === "user" ? "text-right" : "text-left"}`}>
                     {message.timestamp.toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -273,18 +223,18 @@ La prima anual es de $5,500, pagadera en cuotas mensuales.`
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="rounded-3xl px-4 py-2 text-sm bg-gray-100">
-                    <div className="flex space-x-1">
+                  <div className="rounded-2xl px-4 py-2.5 text-sm bg-gray-100">
+                    <div className="flex space-x-1.5">
                       <div
-                        className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        className="w-2 h-2 rounded-full bg-gray-500 animate-bounce"
                         style={{ animationDelay: "0ms" }}
                       ></div>
                       <div
-                        className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        className="w-2 h-2 rounded-full bg-gray-500 animate-bounce"
                         style={{ animationDelay: "150ms" }}
                       ></div>
                       <div
-                        className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        className="w-2 h-2 rounded-full bg-gray-500 animate-bounce"
                         style={{ animationDelay: "300ms" }}
                       ></div>
                     </div>
@@ -297,27 +247,28 @@ La prima anual es de $5,500, pagadera en cuotas mensuales.`
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t">
-        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+      <div className="p-4 border-t bg-white">
+        <form onSubmit={handleSubmit} className="flex items-center space-x-3">
           <Input
             ref={inputRef}
             type="text"
-            placeholder="Escribe tu mensaje..."
+            placeholder="Escribe tu mensaje al Asistente Principal..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="flex-1 rounded-full"
+            className="flex-1 rounded-full h-12 px-5 focus-visible:ring-black"
+            autoFocus
           />
           <Button
             type="submit"
             size="icon"
-            className="rounded-full bg-black text-white hover:bg-black/90"
-            disabled={isTyping}
+            className="rounded-full bg-black text-white hover:bg-black/90 w-12 h-12"
+            disabled={isTyping || !input.trim()}
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-5 w-5" />
             <span className="sr-only">Enviar mensaje</span>
           </Button>
         </form>
       </div>
     </div>
   )
-}
+} 
