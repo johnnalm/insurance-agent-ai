@@ -1,12 +1,35 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { MessageCircle } from "lucide-react"
 
 export function MainNav() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [isChatDialogOpen, setIsChatDialogOpen] = useState(false)
+  const [chatQuery, setChatQuery] = useState("")
+
+  const handleStartChat = () => {
+    if (chatQuery.trim()) {
+      router.push(`/chat?q=${encodeURIComponent(chatQuery)}`)
+      setChatQuery("")
+      setIsChatDialogOpen(false)
+    }
+  }
 
   return (
     <div className="flex justify-between items-center w-full">
@@ -54,11 +77,56 @@ export function MainNav() {
           >
             Plantillas
           </Link>
+          <Link
+            href="/chat"
+            className={cn(
+              "text-sm font-medium transition-colors hover:text-primary",
+              pathname === "/chat" ? "text-black" : "text-muted-foreground",
+            )}
+          >
+            Chat
+          </Link>
         </nav>
       </div>
-      <Link href="/policy/create">
-        <Button className="rounded-full bg-black text-white hover:bg-black/90">NUEVA PÓLIZA</Button>
-      </Link>
+      <div className="flex items-center space-x-2">
+        <Dialog open={isChatDialogOpen} onOpenChange={setIsChatDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <MessageCircle className="h-5 w-5" />
+              <span className="sr-only">Abrir chat principal</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Chat Principal</DialogTitle>
+              <DialogDescription>
+                Haz una pregunta o describe lo que necesitas. Te redirigiremos a una página de chat dedicada.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <Input
+                id="chatQuery"
+                placeholder="Ej: ¿Cómo puedo crear una póliza para mi auto?"
+                value={chatQuery}
+                onChange={(e) => setChatQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleStartChat();
+                  }
+                }}
+              />
+            </div>
+            <DialogFooter>
+              <Button onClick={handleStartChat} disabled={!chatQuery.trim()} className="bg-black text-white hover:bg-black/90">
+                Iniciar Chat
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Link href="/policy/create">
+          <Button className="rounded-full bg-black text-white hover:bg-black/90">NUEVA PÓLIZA</Button>
+        </Link>
+      </div>
     </div>
   )
 }
