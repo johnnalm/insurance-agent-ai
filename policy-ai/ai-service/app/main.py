@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import internal_v1 # Importa tu router
+from app.api import internal_v1, auth
 
 app = FastAPI(
     title="Policy AI - AI Service",
@@ -7,18 +7,10 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Incluye el router de la API interna
-# Puedes prefijarlo si quieres, ej: prefix="/internal/v1"
 app.include_router(internal_v1.router, prefix="/api/internal/v1")
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 
 @app.get("/health", tags=["Health"])
 def read_root():
     """Health check endpoint."""
     return {"status": "OK"}
-
-# Añadir eventos de startup si necesitas inicializar algo
-# @app.on_event("startup")
-# async def startup_event():
-#     print("AI Service starting up...")
-#     # Inicializar modelos, conexiones, etc.
-#     pass
