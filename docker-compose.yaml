@@ -29,6 +29,8 @@ services:
       - .env
     volumes:
       - ./policy-ai/ai-service/app:/app/app
+      - ./policy-ai/ai-service/tests:/app/tests
+
     # If your vector store or other resources need persistent data, define volumes here.
     # volumes:
     #   - ./data/vector_store:/app/vector_store_data
