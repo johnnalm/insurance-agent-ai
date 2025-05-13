@@ -14,3 +14,8 @@ langchain-pinecone # Nueva dependencia recomendada
 langgraph # For building the agent graph
 tavily-python # For Tavily search tool
 # Añade aquí otras dependencias (ej: langchain-ollama si usas Ollama)
+# ragas
+ragas[all]
+datasets
+evaluate
+pytest
