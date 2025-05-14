@@ -97,66 +97,33 @@ except Exception as e:
 
 # --- LangGraph Agent Setup ---
 
-# Define the state for the graph
-# MessagesState includes 'messages' which is a list of BaseMessages
-# We use add_messages to handle appending new messages to the state
-class AgentState(MessagesState):
-    pass
+# AgentState is defined in graph.py and used by build_agent_executor.
+# call_model (specific to the old graph setup) is also not needed here as
+# build_agent_executor in graph.py handles its own model calling logic.
 
-# Define the function that calls the model
-def call_model(state: AgentState, config):
-    messages = state['messages']
-    # Ensure llm is accessible here, perhaps pass via config or make it global/class member if preferred
-    response = llm_with_tools.invoke(messages, config=config)
-    # We return a list, because this will get added to the existing list
-    return {"messages": [response]}
-
-
-# Initialize the LLM with tools bound
-# Using a model that supports tool calling well, like gpt-4o or gpt-3.5-turbo with recent updates
+# Initialize the LLM
+# This LLM instance will be passed to build_agent_executor
 llm = ChatOpenAI(model="gpt-4o", temperature=0, streaming=True)
-llm_with_tools = llm.bind_tools(tools)
+# llm_with_tools is bound within build_agent_executor in graph.py
 
-# Build the graph
-graph_builder = StateGraph(AgentState)
-
-# Define the nodes
-graph_builder.add_node("agent", call_model)
-tool_node = ToolNode(tools) # ToolNode executes tools and returns ToolMessages
-graph_builder.add_node("tools", tool_node)
-
-# Define the edges
-graph_builder.set_entry_point("agent")
-
-# Conditional edge: run tools if the agent decided to, otherwise end
-graph_builder.add_conditional_edges(
-    "agent",
-    # This is the function determining which node to call next
-    tools_condition,
-    # This dictionary routes based on the output of tools_condition
-    {
-        # If the condition returns "tools", call the tool node.
-        "tools": "tools",
-        # Otherwise, finish. END is a special node marking the end of the graph.
-        END: END,
-    },
-)
-
-# Edge from tool execution back to the agent to process tool results
-graph_builder.add_edge("tools", "agent")
-
-# Compile the graph
-agent_executor = graph_builder.compile()
-logger.info("LangGraph agent executor compiled successfully.")
+# The graph construction logic previously here (lines ~111-148 in the original file)
+# was redundant because agent_executor was immediately overwritten by the call
+# to build_agent_executor. We rely solely on build_agent_executor from graph.py now.
 
 # --- Build Agent Executor ---
 agent_executor = None
 if llm:
     try:
+        # build_agent_executor (from app.ai.graph) will use the 'tools' list defined above in this file
+        # if graph.py imports it, or if tools are passed/managed differently.
+        # Assuming graph.py correctly sources or is passed the 'tools'.
+        # The 'llm' object is passed to the builder.
         agent_executor = build_agent_executor(llm)
+        # The logger message "LangGraph agent executor compiled successfully."
+        # is now handled within build_agent_executor.
     except Exception as e:
         # Error already logged in build_agent_executor
-        logger.error("Agent executor could not be built.")
+        logger.error("Agent executor could not be built from rag_agent.py.") # Clarify source of this log
 else:
     logger.error("LLM not available, cannot build agent executor.")
 

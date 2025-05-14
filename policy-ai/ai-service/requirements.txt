@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-pydantic
+pydantic[email]
 python-dotenv
 pinecone
 langchain
@@ -13,9 +13,12 @@ sentence-transformers # Para modelos de embeddings locales/HuggingFace
 langchain-pinecone # Nueva dependencia recomendada
 langgraph # For building the agent graph
 tavily-python # For Tavily search tool
+python-multipart # Para el manejo de datos de formularios en FastAPI
 # Añade aquí otras dependencias (ej: langchain-ollama si usas Ollama)
 # ragas
 ragas[all]
 datasets
 evaluate
 pytest
+python-magic
+supabase

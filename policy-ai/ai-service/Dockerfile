@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Instala dependencias del sistema si fueran necesarias (ej. para algunas librerías C)
-# RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 && rm -rf /var/lib/apt/lists/*
 
 # Copia el archivo de requerimientos primero para aprovechar el caché de Docker
 COPY requirements.txt .
