@@ -10,10 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Upload, FileText, Search, ArrowRight, CheckCircle, AlertCircle } from "lucide-react"
 import PolicyChat from "@/components/policy-chat"
 
+interface UploadedFileInfo {
+  url: string;
+  filename: string;
+  // Add other relevant fields from FastAPI response if needed
+}
+
 export default function AnalyzePage() {
   const [activeTab, setActiveTab] = useState("upload")
   const [file, setFile] = useState<File | null>(null)
   const [policyText, setPolicyText] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<UploadedFileInfo | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [analysisResults, setAnalysisResults] = useState<null | {
@@ -23,11 +31,44 @@ export default function AnalyzePage() {
     recommendations: string[]
   }>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setAnalysisComplete(false)
-      setAnalysisResults(null)
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      setAnalysisComplete(false);
+      setAnalysisResults(null);
+      setUploadedFileInfo(null);
+
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("document_type", "policy");
+
+      try {
+        const response = await fetch("/api/internal/upload_pdf", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          console.error("Upload failed:", response.statusText);
+          alert(`Error en la subida: ${response.statusText}`);
+          setIsUploading(false);
+          setFile(null);
+          return;
+        }
+
+        const data = await response.json();
+        setUploadedFileInfo({ url: data.document.url, filename: data.document.original_filename || data.document.filename });
+        setActiveTab("upload");
+
+      } catch (error) {
+        console.error("Error uploading file:", error);
+        alert("Error al subir el archivo. Por favor, inténtalo de nuevo.");
+        setFile(null);
+      } finally {
+        setIsUploading(false);
+      }
     }
   }
 
@@ -37,33 +78,118 @@ export default function AnalyzePage() {
     setAnalysisResults(null)
   }
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async (fileUrlForAnalysis?: string) => {
     setIsAnalyzing(true)
+    setAnalysisComplete(false)
+    setAnalysisResults(null)
 
-    // Simulación de análisis
-    setTimeout(() => {
+    const query = "Analiza esta póliza, detallando fortalezas, debilidades y recomendaciones."
+    const thread_id = localStorage.getItem("thread_id") || undefined
+
+    try {
+      let requestBody: any = {
+        query,
+        thread_id,
+      }
+
+      if (fileUrlForAnalysis) {
+        requestBody.document_url = fileUrlForAnalysis
+      } else if (uploadedFileInfo) {
+        requestBody.document_url = uploadedFileInfo.url
+      } else if (policyText) {
+        console.log("Analyzing pasted text (simulated for now if no backend for direct text):", policyText)
+        setTimeout(() => {
+          setAnalysisResults({
+            score: 65,
+            strengths: ["Texto claro y conciso"],
+            weaknesses: ["Cobertura limitada"],
+            recommendations: ["Considerar ampliar cobertura"],
+          })
+          setIsAnalyzing(false)
+          setAnalysisComplete(true)
+        }, 1500)
+        return
+      }
+
+      const response = await fetch("/api/internal/answer_query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        console.error("Analysis failed:", response.statusText)
+        alert(`Error en el análisis: ${response.statusText}`)
+        setAnalysisResults({ score: 0, strengths: [], weaknesses: [`Error: ${response.statusText}`], recommendations: [] })
+        setIsAnalyzing(false)
+        setAnalysisComplete(true)
+        return
+      }
+
+      const data = await response.json()
+
+      try {
+        // Attempt to parse the 'answer' field as JSON, assuming it's the structured analysis
+        const parsedAnswer = JSON.parse(data.answer);
+
+        if (
+          typeof parsedAnswer === "object" &&
+          parsedAnswer !== null &&
+          parsedAnswer.hasOwnProperty("score") &&
+          typeof parsedAnswer.score === "number" &&
+          parsedAnswer.hasOwnProperty("strengths") &&
+          Array.isArray(parsedAnswer.strengths) &&
+          parsedAnswer.hasOwnProperty("weaknesses") &&
+          Array.isArray(parsedAnswer.weaknesses) &&
+          parsedAnswer.hasOwnProperty("recommendations") &&
+          Array.isArray(parsedAnswer.recommendations)
+        ) {
+          setAnalysisResults(parsedAnswer);
+        } else {
+          // Parsed, but not the right structure
+          console.error("Parsed analysis response is not the expected structure:", parsedAnswer);
+          setAnalysisResults({
+            score: 0,
+            strengths: [],
+            weaknesses: ["Error: El formato de respuesta del análisis es inesperado después de parsear."],
+            recommendations: ["Por favor, verifique la consola del backend para más detalles."],
+          });
+        }
+      } catch (e) {
+        // Failed to parse data.answer, means it wasn't a JSON string.
+        // Could be a plain text chat response if the RAG agent didn't go down the analysis path,
+        // or an error string from the backend that wasn't JSON formatted.
+        console.error("Analysis response in data.answer was not valid JSON or missing:", data.answer, e);
+        setAnalysisResults({
+          score: 0,
+          strengths: [],
+          weaknesses: [
+            `Error: La respuesta del análisis no tuvo el formato JSON esperado. Detalle: ${ (e instanceof Error) ? e.message : String(e) }`,
+          ],
+          recommendations: [`Respuesta recibida (campo 'answer'): ${data.answer !== undefined ? String(data.answer).substring(0, 200) + '...' : "campo 'answer' no definido"}`],
+        });
+      }
+
+    } catch (error) {
+      console.error("Error analyzing policy (fetch or network issue):", error)
+      alert("Error al analizar la póliza (fetch/network). Por favor, inténtalo de nuevo.")
+      setAnalysisResults({ score: 0, strengths: [], weaknesses: [`Error de red o fetch: ${(error instanceof Error) ? error.message : String(error)}`], recommendations: [] })
+    } finally {
       setIsAnalyzing(false)
       setAnalysisComplete(true)
-      setAnalysisResults({
-        score: 78,
-        strengths: [
-          "Cobertura completa para daños a terceros",
-          "Términos de pago flexibles",
-          "Proceso de reclamación bien definido",
-        ],
-        weaknesses: [
-          "Exclusiones ambiguas en caso de desastres naturales",
-          "Límite de cobertura relativamente bajo",
-          "Falta de cobertura para ciertos escenarios específicos",
-        ],
-        recommendations: [
-          "Aumentar el límite de cobertura a $2,000,000",
-          "Clarificar las exclusiones relacionadas con desastres naturales",
-          "Añadir cobertura para interrupción de negocio",
-          "Incluir asistencia legal 24/7",
-        ],
-      })
-    }, 3000)
+    }
+  }
+
+  let analyzeButtonText = "Analizar Póliza"
+  let analyzeButtonAction = () => handleAnalyze()
+  let analyzeButtonDisabled = (!file && !policyText && !uploadedFileInfo) || isAnalyzing || isUploading
+
+  if (uploadedFileInfo && !analysisComplete && !isAnalyzing) {
+    analyzeButtonText = "Analizar Póliza Cargada"
+  } else if (uploadedFileInfo && analysisComplete) {
+    analyzeButtonText = "Chatear sobre este Documento"
   }
 
   return (
@@ -122,12 +248,22 @@ export default function AnalyzePage() {
                           className="hidden"
                           accept=".pdf,.docx,.txt"
                           onChange={handleFileChange}
+                          disabled={isUploading}
                         />
                       </label>
                     </div>
-                    {file && (
+                    {isUploading && (
+                      <div className="mt-4 text-sm text-blue-600">
+                        <div className="flex items-center justify-center">
+                          <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                          Subiendo archivo...
+                        </div>
+                      </div>
+                    )}
+                    {file && !isUploading && (
                       <div className="mt-4 text-sm">
                         <span className="font-medium">Archivo seleccionado:</span> {file.name}
+                        {uploadedFileInfo && <span className="text-green-600 ml-2">(Subido ✓)</span>}
                       </div>
                     )}
                   </div>
@@ -184,8 +320,8 @@ export default function AnalyzePage() {
             className="flex justify-center"
           >
             <Button
-              onClick={handleAnalyze}
-              disabled={(!file && !policyText) || isAnalyzing}
+              onClick={analyzeButtonAction}
+              disabled={analyzeButtonDisabled}
               className="rounded-full bg-black text-white hover:bg-black/90 px-8"
               size="lg"
             >
@@ -196,7 +332,7 @@ export default function AnalyzePage() {
                 </>
               ) : (
                 <>
-                  Analizar Póliza
+                  {analyzeButtonText}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
@@ -277,9 +413,10 @@ export default function AnalyzePage() {
             transition={{ duration: 0.5, delay: 0.6 }}
           >
             <PolicyChat
-              policyTitle="Análisis de Póliza"
+              policyTitle={uploadedFileInfo?.filename || "Análisis de Póliza"}
               isNew={false}
               initialMessage="¡Hola! Soy tu asistente de análisis de pólizas. Puedo ayudarte a entender los resultados del análisis y responder cualquier pregunta que tengas sobre tu póliza. ¿En qué puedo ayudarte hoy?"
+              documentContext={uploadedFileInfo ? { url: uploadedFileInfo.url, filename: uploadedFileInfo.filename } : undefined}
             />
           </motion.div>
         </div>

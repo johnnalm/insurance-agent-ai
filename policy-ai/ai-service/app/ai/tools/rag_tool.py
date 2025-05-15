@@ -21,8 +21,12 @@ def log_retrieved_docs(docs):
 
 @tool
 def policy_rag_tool(query: str) -> str:
-    """Searches and answers questions about insurance policies using internal knowledge."""
-    logger.info(f"Executing RAG tool for query: '{query}'")
+    """
+    Searches and answers questions about insurance policies using the general internal knowledge base (e.g., Pinecone).
+    This tool should NOT be used if a specific document_url is available for context.
+    If a specific document_url is provided elsewhere in the conversation, use the 'specific_document_qa_tool' instead.
+    """
+    logger.info(f"Executing GENERAL RAG tool for query: '{query}'")
     try:
         vector_store = get_vector_store()
         retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={'k': 3}) # Reduced K for tool context

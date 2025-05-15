@@ -30,6 +30,10 @@ def answer_query(request: QueryRequest):
             # logger.warning("thread_id not provided by client, agent will use its default.")
             pass # Agent will use its default or handle empty config
 
+        # Add document_url to config if present
+        if request.document_url:
+            config["document_context"] = {"url": request.document_url}
+            
         answer = get_agent_response(request.query, config=config)
         return QueryResponse(answer=answer)
     except Exception as e:
