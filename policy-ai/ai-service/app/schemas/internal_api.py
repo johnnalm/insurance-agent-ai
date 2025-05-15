@@ -1,8 +1,10 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class QueryRequest(BaseModel):
     query: str
     thread_id: str | None = None
+    document_url: str | None = None
 
 class QueryResponse(BaseModel):
     answer: str

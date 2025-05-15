@@ -11,7 +11,7 @@ try:
     if os.getenv("TAVILY_API_KEY"):
         tavily_tool = TavilySearchResults(max_results=3)
         tavily_tool.name = "web_search_tool"
-        tavily_tool.description = "Searches the web for information, especially useful for current regulations or general insurance knowledge not found in internal policies."
+        tavily_tool.description = "Searches the web for information. Use this for general knowledge questions, current events, or regulations not covered by internal documents or a specific provided policy document."
         logger.info("Tavily Search tool initialized successfully.")
     else:
         logger.warning("TAVILY_API_KEY not found in environment. Tavily Search tool is disabled.")

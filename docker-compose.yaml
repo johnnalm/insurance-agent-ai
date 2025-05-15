@@ -10,7 +10,7 @@ services:
     environment:
       # This ensures Next.js app inside the container can reach the backend service.
       # The backend service will be available at http://backend:8001
-      - FASTAPI_BACKEND_URL=http://backend:8001/api/internal/v1/answer_query
+      - FASTAPI_BACKEND_URL=http://backend:8001
       # The Next.js Dockerfile sets NODE_ENV=production in the final stage.
       # Setting it here can be useful if you adapt the Dockerfile for dev, but for now it's more for clarity.
       - NODE_ENV=development
