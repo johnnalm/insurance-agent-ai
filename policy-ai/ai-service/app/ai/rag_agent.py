@@ -1,26 +1,17 @@
 import os
 import logging
-from typing import Annotated
+from typing import Annotated, Optional, List
+import json
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_core.tools import tool
-from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode, tools_condition
-
-# Use MessagesState for agent state management
-from langgraph.graph.message import MessagesState, add_messages
+from langchain_core.messages import BaseMessage, HumanMessage
+from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
 
-from .vector_store import get_vector_store
-
-# Import the function to build the agent executor
 from .graph import build_agent_executor
+from app.utils.pdf_processor import download_pdf_content, extract_text_from_pdf
 
 load_dotenv()
 
@@ -31,130 +22,155 @@ logger = logging.getLogger(__name__)
 # Print the API key for debugging
 logger.info(f"OpenAI API Key Loaded: '{os.getenv('OPENAI_API_KEY')[:5]}...'") # Print first 5 chars for security
 
-# --- RAG Components (Adapted for Tool) ---
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-def log_retrieved_docs(docs):
-    # Simplified logging for tool context
-    if docs:
-        logger.info(f"Retrieved {len(docs)} documents for RAG tool.")
-    else:
-        logger.info("No documents retrieved for RAG tool.")
-    return docs
-
-# --- Tool Definitions ---
-
-@tool
-def policy_rag_tool(query: str) -> str:
-    """Searches and answers questions about insurance policies using internal knowledge."""
-    logger.info(f"Executing RAG tool for user query: '{query}'") # Log original query
-    try:
-        vector_store = get_vector_store()
-        # Consider making retriever k configurable or logging it
-        retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={'k': 3})
-        logger.info(f"Retriever configured with k=3. Invoking with processed query (if any modifications were made by agent before tool call).")
-
-        # Directly use the query for retrieval for now.
-        # If the agent modifies the query before calling the tool, that modified query would be used.
-        retrieved_docs = retriever.invoke(query) # Get raw docs
-
-        logger.info(f"Retriever returned {len(retrieved_docs)} documents.")
-        if retrieved_docs:
-            for i, doc in enumerate(retrieved_docs):
-                logger.info(f"Doc {i+1} (first 100 chars): {doc.page_content[:100]}...")
-                logger.info(f"Doc {i+1} metadata: {doc.metadata}")
-
-        # Simplified RAG chain for tool - Agent LLM will handle final answer synthesis
-        # The log_retrieved_docs and format_docs are now effectively done above for logging
-        # and below for context assembly.
-
-        if not retrieved_docs:
-            return "No relevant policy information found in the internal knowledge base for the query."
-
-        context = "\n\n".join(doc.page_content for doc in retrieved_docs)
-        # Return context for the agent to synthesize the answer
-        return f"""Retrieved context:
-{context}"""
-    except Exception as e:
-        logger.error(f"Error in RAG tool: {e}", exc_info=True)
-        return "Error executing the policy RAG tool."
-
-# Requires TAVILY_API_KEY environment variable
-# Ensure tavily-python is installed: pip install tavily-python
-try:
-    tavily_tool = TavilySearchResults(max_results=3)
-    tavily_tool.name = "web_search_tool"
-    tavily_tool.description = "Searches the web for information, especially useful for current regulations or general insurance knowledge not found in internal policies."
-    tools = [policy_rag_tool, tavily_tool]
-    logger.info("Tools initialized successfully (RAG, Tavily).")
-except Exception as e:
-    logger.error(f"Failed to initialize Tavily Search tool. Ensure TAVILY_API_KEY is set and tavily-python is installed: {e}", exc_info=True)
-    # Fallback to only RAG tool if Tavily fails
-    tools = [policy_rag_tool]
-    logger.warning("Falling back to only using the RAG tool.")
-
-
 # --- LangGraph Agent Setup ---
 
-# AgentState is defined in graph.py and used by build_agent_executor.
-# call_model (specific to the old graph setup) is also not needed here as
-# build_agent_executor in graph.py handles its own model calling logic.
-
-# Initialize the LLM
-# This LLM instance will be passed to build_agent_executor
 llm = ChatOpenAI(model="gpt-4o", temperature=0, streaming=True)
-# llm_with_tools is bound within build_agent_executor in graph.py
 
-# The graph construction logic previously here (lines ~111-148 in the original file)
-# was redundant because agent_executor was immediately overwritten by the call
-# to build_agent_executor. We rely solely on build_agent_executor from graph.py now.
+# --- Define structured output model ---
+class PolicyAnalysisOutput(BaseModel):
+    score: int = Field(..., description="Un número entero entre 0 y 100 representando la calidad general de la póliza")
+    strengths: List[str] = Field(..., description="Una lista de fortalezas clave de la póliza")
+    weaknesses: List[str] = Field(..., description="Una lista de debilidades clave o áreas de mejora de la póliza")
+    recommendations: List[str] = Field(..., description="Una lista de recomendaciones concretas para el titular de la póliza")
 
 # --- Build Agent Executor ---
 agent_executor = None
 if llm:
     try:
-        # build_agent_executor (from app.ai.graph) will use the 'tools' list defined above in this file
-        # if graph.py imports it, or if tools are passed/managed differently.
-        # Assuming graph.py correctly sources or is passed the 'tools'.
-        # The 'llm' object is passed to the builder.
         agent_executor = build_agent_executor(llm)
-        # The logger message "LangGraph agent executor compiled successfully."
-        # is now handled within build_agent_executor.
     except Exception as e:
-        # Error already logged in build_agent_executor
-        logger.error("Agent executor could not be built from rag_agent.py.") # Clarify source of this log
+        logger.error(f"Agent executor could not be built from rag_agent.py (relying on graph.py): {e}", exc_info=True)
 else:
     logger.error("LLM not available, cannot build agent executor.")
 
 # --- Main Function to Interact with Agent ---
+
+ANALYSIS_QUERY_TEXT = "Analiza esta póliza, detallando fortalezas, debilidades y recomendaciones."
+
 def get_agent_response(query: str, config: dict = None) -> str:
-    """Gets a response from the LangGraph agent for the given query."""
-    if not agent_executor:
-        logger.error("Agent executor is not available.")
-        raise Exception("LangGraph agent executor not initialized or failed to build.")
+    """
+    Gets a response from the LangGraph agent for the given query.
+    If the query is the specific analysis query with a document_url,
+    it returns a structured JSON analysis. Otherwise, it uses the conversational agent.
+    """
+    if not agent_executor and query != ANALYSIS_QUERY_TEXT:
+        if query != ANALYSIS_QUERY_TEXT: # Allow analysis query even if main agent fails, but log
+             logger.error("Agent executor is not available for conversational query.")
+             raise Exception("LangGraph agent executor not initialized or failed to build.")
+        # If it is the analysis query, we can proceed as it uses a direct LLM call, not the agent_executor.
 
     if not query:
-        return "Please provide a query."
+        return json.dumps({
+            "score": 0, "strengths": [], "weaknesses": ["Error: No se proporcionó ninguna consulta."], "recommendations": []
+        })
 
-    logger.info(f"Invoking agent with query: '{query}'")
+    if config is None:
+        config = {}
+    
+    if query == ANALYSIS_QUERY_TEXT and "document_context" in config and "url" in config["document_context"]:
+        doc_url = config["document_context"]["url"]
+        logger.info(f"Performing structured analysis for query: '{query}' on document: {doc_url}")
+
+        try:
+            pdf_bytes = download_pdf_content(doc_url)
+            if not pdf_bytes:
+                logger.error(f"Failed to download PDF for analysis: {doc_url}")
+                return json.dumps({
+                    "score": 0, "strengths": [],
+                    "weaknesses": ["Error: No se pudo descargar el documento PDF para el análisis."],
+                    "recommendations": ["Por favor, verifique la URL del documento o la conexión de red."]
+                })
+
+            text_content = extract_text_from_pdf(pdf_bytes)
+            if not text_content:
+                logger.error(f"Failed to extract text for analysis from PDF: {doc_url}")
+                return json.dumps({
+                    "score": 0, "strengths": [],
+                    "weaknesses": ["Error: No se pudo extraer texto del documento PDF. Puede estar vacío o corrupto."],
+                    "recommendations": ["Por favor, intente con otro documento."]
+                })
+
+            system_prompt_template = """
+            Eres un experto analista de pólizas de seguros. Analiza el siguiente texto de una póliza de seguro.
+            Debes generar una respuesta JSON con la siguiente estructura:
+            {{
+              "score": <un número entero entre 0 y 100 representando la calidad general de la póliza>,
+              "strengths": ["<una lista de fortalezas clave de la póliza>"],
+              "weaknesses": ["<una lista de debilidades clave o áreas de mejora de la póliza>"],
+              "recommendations": ["<una lista de recomendaciones concretas para el titular de la póliza>"]
+            }}
+            Asegúrate de que la salida sea únicamente un objeto JSON válido y nada más.
+            No incluyas explicaciones adicionales fuera del JSON.
+            Calcula el 'score' basándote en tu análisis general de las fortalezas y debilidades.
+            El idioma de las fortalezas, debilidades y recomendaciones debe ser español.
+            """
+            
+            human_prompt_template = "Texto de la póliza para analizar:\n\n{policy_text}"
+
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt_template),
+                ("human", human_prompt_template)
+            ])
+            
+            structured_llm = ChatOpenAI(model="gpt-4o", temperature=0.1).with_structured_output(PolicyAnalysisOutput)
+            
+            chain = prompt | structured_llm
+            analysis_result_pydantic = chain.invoke({"policy_text": text_content[:16000]})
+
+            json_response_str = analysis_result_pydantic.model_dump_json()
+            logger.info(f"Structured analysis JSON response generated: {json_response_str[:200]}...")
+            return json_response_str
+
+        except Exception as e:
+            logger.error(f"Error generating structured JSON analysis: {e}", exc_info=True)
+            return json.dumps({
+                "score": 0, "strengths": [],
+                "weaknesses": ["Error: Ocurrió un error interno al generar el análisis estructurado."],
+                "recommendations": ["Por favor, inténtelo de nuevo más tarde o contacte a soporte si el problema persiste."]
+            })
+    
+    # Fallback to conversational agent for all other queries or if analysis conditions not met
+    if not agent_executor:
+        logger.error("Agent executor is not available for conversational query after analysis attempt.")
+        return "Error: El agente de conversación no está disponible."
+
+    config.setdefault("configurable", {}).setdefault("thread_id", "default_thread")
+    if config["configurable"]["thread_id"] == "default_thread":
+        logger.warning(f"Using default thread_id for conversational agent: {config['configurable']['thread_id']}")
+
+    actual_query_for_agent = query
+    document_context_info = ""
+
+    if "document_context" in config and "url" in config["document_context"]:
+        doc_url = config["document_context"]["url"]
+        actual_query_for_agent = (
+            f"The user's query is: '{query}'.\\n"
+            f"A specific document is available for context at URL: '{doc_url}'.\\n"
+            f"To answer this query, you MUST use the 'specific_document_qa_tool'.\\n"
+            f"When calling 'specific_document_qa_tool', you MUST provide two arguments:\\n"
+            f"1. 'query': Set this to the user's original query, which is: '{query}'.\\n"
+            f"2. 'document_url': Set this to the document URL, which is: '{doc_url}'.\\n"
+            f"Ensure your tool call to 'specific_document_qa_tool' includes both these arguments with these exact values. Do not use any other tool if this document URL is present."
+        )
+        document_context_info = f" with document_url: {doc_url}"
+        logger.info(f"Conversational agent will be invoked with a highly directive query for specific_document_qa_tool. User query: '{query}', Doc URL: {doc_url}")
+    else:
+        logger.info(f"Conversational agent will be invoked for a general query (no specific document_url). User query: '{query}'")
+    
+    logger.info(f"Invoking conversational agent. Effective query for agent: '{actual_query_for_agent}'{document_context_info}, Config: {config}")
+
     try:
-        # Ensure config has a thread_id for state management
-        if config is None:
-            config = {"configurable": {"thread_id": "default_thread"}}
-        elif "configurable" not in config or "thread_id" not in config["configurable"]:
-            config.setdefault("configurable", {})["thread_id"] = "default_thread"
-            logger.warning(f"Using default thread_id: {config['configurable']['thread_id']}")
+        final_state = agent_executor.invoke(
+            {"messages": [HumanMessage(content=actual_query_for_agent)]}, 
+            config=config
+        )
 
-        final_state = agent_executor.invoke({"messages": [HumanMessage(content=query)]}, config=config)
-
-        # Extract the final response from the last AI message without tool calls
         final_response_message = None
         if final_state and 'messages' in final_state:
              for msg in reversed(final_state['messages']):
                  if isinstance(msg, BaseMessage) and msg.type == "ai" and not getattr(msg, 'tool_calls', None):
                      final_response_message = msg
-                     break # Found the last relevant AI response
+                     break
 
         if final_response_message:
             response_content = final_response_message.content
@@ -210,4 +226,4 @@ def get_agent_response(query: str, config: dict = None) -> str:
 
 # Final structure adjustment: Move logging config up top
 # Ensure vector_store import is correct relative to this file path
-# Ensure necessary packages (langgraph, langchain-openai, langchain-community, tavily-python, python-dotenv) are installed.
+# Ensure necessary packages (langgraph, langchain-openai, langchain-community, tavily-python, python-dotenv, pydantic) are installed.

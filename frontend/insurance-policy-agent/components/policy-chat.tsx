@@ -17,6 +17,7 @@ interface PolicyChatProps {
   onApplyChanges?: (newContent: string) => void
   initialMessage?: string
   policyContent?: string
+  documentContext?: { url: string; filename: string; }
 }
 
 interface Message {
@@ -26,7 +27,7 @@ interface Message {
   timestamp: Date
 }
 
-export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges, initialMessage, policyContent }: PolicyChatProps) {
+export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges, initialMessage, policyContent, documentContext }: PolicyChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -77,15 +78,21 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
     setIsTyping(true)
 
     try {
+      const requestBody: any = {
+        query: userMessage,
+        thread_id: threadId,
+      };
+
+      if (documentContext?.url) {
+        requestBody.document_url = documentContext.url;
+      }
+
       const response = await fetch("/api/internal/answer_query", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          query: userMessage,
-          thread_id: threadId,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
