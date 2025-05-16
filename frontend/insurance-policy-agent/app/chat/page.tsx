@@ -2,6 +2,7 @@
 
 import MainChat from "@/components/main-chat"
 import { Suspense } from 'react';
+import ProtectedRoute from "../components/ProtectedRoute";
 
 // A simple loader component
 function ChatPageLoader() {
@@ -14,6 +15,7 @@ function ChatPageLoader() {
 
 export default function ChatPage() {
   return (
+    <ProtectedRoute>
     // Wrap MainChat with Suspense for useSearchParams
     <Suspense fallback={<ChatPageLoader />}>
       <div className="container mx-auto py-10 h-full flex flex-col">
@@ -26,5 +28,6 @@ export default function ChatPage() {
         </div>
       </div>
     </Suspense>
+    </ProtectedRoute>
   )
 } 

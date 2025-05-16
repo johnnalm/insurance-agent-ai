@@ -5,8 +5,10 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Shield, Star, Zap, ArrowRight, Play, ChevronDown } from "lucide-react"
 import { motion, useScroll, useTransform } from "framer-motion"
+import { useAuth } from "./context/AuthContext"
 
 export default function HomePage() {
+  const { isAuthenticated } = useAuth()
   const [activeSection, setActiveSection] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
@@ -57,6 +59,37 @@ export default function HomePage() {
         </div>
 
         <div className="container px-4 md:px-6 z-10">
+          <div className="flex justify-end mb-8">
+            {isAuthenticated ? (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+              >
+                <Link href="/dashboard">Mi Dashboard</Link>
+              </Button>
+            ) : (
+              <div className="space-x-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                >
+                  <Link href="/login">Iniciar Sesión</Link>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  className="rounded-full bg-black text-white hover:bg-black/90"
+                >
+                  <Link href="/register">Registrarse</Link>
+                </Button>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col items-center text-center space-y-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
