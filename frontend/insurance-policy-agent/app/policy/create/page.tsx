@@ -1,7 +1,9 @@
+import ProtectedRoute from "@/app/components/ProtectedRoute"
 import PolicyChat from "@/components/policy-chat"
 
 export default function CreatePolicyPage() {
   return (
+    <ProtectedRoute>
     <div className="container py-10">
       <h1 className="text-4xl font-bold tracking-tight mb-2">Crear Nueva Póliza</h1>
       <p className="text-muted-foreground mb-8">Utilice el asistente AI para crear una nueva póliza personalizada</p>
@@ -38,5 +40,6 @@ La prima anual es..."
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

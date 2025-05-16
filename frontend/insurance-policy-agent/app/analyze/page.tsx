@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Upload, FileText, Search, ArrowRight, CheckCircle, AlertCircle } from "lucide-react"
 import PolicyChat from "@/components/policy-chat"
+import ProtectedRoute from "../components/ProtectedRoute"
 
 interface UploadedFileInfo {
   url: string;
@@ -193,6 +194,7 @@ export default function AnalyzePage() {
   }
 
   return (
+    <ProtectedRoute>
     <div className="container py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
         <h1 className="text-4xl font-bold tracking-tight mb-2">Analizar Póliza</h1>
@@ -422,5 +424,6 @@ export default function AnalyzePage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }
