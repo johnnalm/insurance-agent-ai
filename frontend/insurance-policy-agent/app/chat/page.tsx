@@ -16,7 +16,6 @@ function ChatPageLoader() {
 export default function ChatPage() {
   return (
     <ProtectedRoute>
-    // Wrap MainChat with Suspense for useSearchParams
     <Suspense fallback={<ChatPageLoader />}>
       <div className="container mx-auto py-10 h-full flex flex-col">
         <h1 className="text-4xl font-bold tracking-tight mb-2">Chat Principal</h1>
