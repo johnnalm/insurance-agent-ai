@@ -1,3 +1,4 @@
+import ProtectedRoute from "@/app/components/ProtectedRoute"
 import { PolicyEditor } from "@/components/policy-editor"
 import { notFound } from "next/navigation"
 
@@ -46,13 +47,15 @@ La prima anual es de $5,000, pagadera en cuotas mensuales.`,
   }
 
   return (
-    <div className="container py-10">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">{policyData.title}</h1>
-        <p className="text-muted-foreground">Revise y modifique su póliza con ayuda del asistente AI</p>
-      </div>
+    <ProtectedRoute>
+      <div className="container py-10">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">{policyData.title}</h1>
+          <p className="text-muted-foreground">Revise y modifique su póliza con ayuda del asistente AI</p>
+        </div>
 
-      <PolicyEditor initialPolicy={policyData} isNew={false} />
-    </div>
+        <PolicyEditor initialPolicy={policyData} isNew={false} />
+      </div>
+    </ProtectedRoute>
   )
 }
