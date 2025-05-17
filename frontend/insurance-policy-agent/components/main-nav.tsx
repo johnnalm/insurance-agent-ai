@@ -15,13 +15,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { MessageCircle } from "lucide-react"
+import { MessageCircle, User, LogOut } from "lucide-react"
+import { useAuth } from "@/app/context/AuthContext"
 
 export function MainNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [isChatDialogOpen, setIsChatDialogOpen] = useState(false)
   const [chatQuery, setChatQuery] = useState("")
+  const { user, logout, isAuthenticated } = useAuth()
 
   const handleStartChat = () => {
     if (chatQuery.trim()) {
@@ -123,6 +125,25 @@ export function MainNav() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <div className="relative">
+          <Button variant="ghost" size="sm" className="rounded-full flex items-center">
+            <User className="h-5 w-5 mr-2" />
+            <span className="hidden md:inline-block">
+              {user?.profile?.first_name 
+                ? `${user.profile.first_name}${user.profile?.last_name ? ' ' + user.profile.last_name : ''}`
+                : user?.email || 'Usuario'}
+            </span>
+          </Button>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="hover:bg-red-50 hover:text-red-600 rounded-full"
+          onClick={logout}
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="sr-only">Cerrar sesión</span>
+        </Button>
         <Link href="/policy/create">
           <Button className="rounded-full bg-black text-white hover:bg-black/90">NUEVA PÓLIZA</Button>
         </Link>

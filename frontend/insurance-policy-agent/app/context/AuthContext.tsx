@@ -6,7 +6,7 @@ import { jwtDecode } from "jwt-decode"
 import axios from "axios"
 
 type User = {
-  id: string
+  id: string // Asegúrate que esto coincida con user_id del backend
   email: string
   profile?: {
     first_name?: string
@@ -34,7 +34,8 @@ type RegisterData = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const API_URL = "http://127.0.0.1:8000/api/auth"
+// Ya no necesitamos la URL completa del backend aquí, llamaremos a las API Routes locales de Next.js
+const API_AUTH_PREFIX = "/api/auth";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
@@ -42,31 +43,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter()
 
   useEffect(() => {
-    // Verificar si el usuario está autenticado al cargar la aplicación
     const checkAuthStatus = async () => {
+      setIsLoading(true);
       try {
         const token = localStorage.getItem("accessToken")
         if (token) {
-          // Validar que el token no esté expirado
           try {
             const decoded: any = jwtDecode(token)
             const currentTime = Date.now() / 1000
             
             if (decoded.exp && decoded.exp < currentTime) {
-              // Token expirado
               localStorage.removeItem("accessToken")
               localStorage.removeItem("refreshToken")
               localStorage.removeItem("user")
               setUser(null)
-              setIsLoading(false)
               return
             }
             
-            // Token válido, cargar datos del usuario
-            const userData = JSON.parse(localStorage.getItem("user") || "{}")
-            setUser(userData)
+            const userDataString = localStorage.getItem("user");
+            if (userDataString) {
+                const storedUser = JSON.parse(userDataString);
+                // Asegúrate que el user almacenado en localStorage tenga 'id' y no 'user_id'
+                // o ajusta aquí para que coincida con la estructura de User type
+                setUser({
+                    id: storedUser.user_id || storedUser.id, // Adaptar según lo que guardes
+                    email: storedUser.email,
+                    profile: storedUser.profile
+                });
+            } else {
+                setUser(null); // No hay datos de usuario
+            }
           } catch (error) {
-            console.error("Error al decodificar token:", error)
+            console.error("Error al decodificar token o parsear usuario:", error)
             localStorage.removeItem("accessToken")
             localStorage.removeItem("refreshToken")
             localStorage.removeItem("user")
@@ -84,21 +92,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      const response = await axios.post(`${API_URL}/login`, { email, password })
-      const { access_token, refresh_token, user } = response.data
+      // Llama a la API Route local de Next.js
+      const response = await axios.post(`${API_AUTH_PREFIX}/login`, { email, password })
+      // La respuesta de la API Route de Next.js debería ser idéntica a la del backend de FastAPI
+      const { access_token, refresh_token, user: backendUser } = response.data
 
-      // Guardar tokens y datos de usuario en localStorage
       localStorage.setItem("accessToken", access_token)
       localStorage.setItem("refreshToken", refresh_token)
-      localStorage.setItem("user", JSON.stringify(user))
+      // Asegúrate que la estructura de 'backendUser' coincida con tu tipo 'User'
+      // Especialmente el campo 'id' vs 'user_id'
+      const appUser: User = {
+        id: backendUser.user_id || backendUser.id, // o como venga del backend
+        email: backendUser.email,
+        profile: backendUser.profile
+      };
+      localStorage.setItem("user", JSON.stringify(appUser))
       
-      // Actualizar estado
-      setUser(user)
+      setUser(appUser)
       
-      // Configurar axios para incluir token en todas las solicitudes
       axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`
-      
-      // Redireccionar a dashboard
       router.push("/dashboard")
     } catch (error: any) {
       console.error("Error de login:", error)
@@ -112,21 +124,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (userData: RegisterData) => {
     setIsLoading(true)
     try {
-      const response = await axios.post(`${API_URL}/register`, userData)
+      // Llama a la API Route local de Next.js
+      const response = await axios.post(`${API_AUTH_PREFIX}/register`, userData)
       
-      // El backend puede devolver un token directamente o requerir login
-      if (response.data.access_token) {
-        // Si el registro también hace login automático
-        const { access_token, refresh_token, user } = response.data
+      if (response.data.access_token && response.data.user) {
+        const { access_token, refresh_token, user: backendUser } = response.data
         
         localStorage.setItem("accessToken", access_token)
         localStorage.setItem("refreshToken", refresh_token)
-        localStorage.setItem("user", JSON.stringify(user))
+        const appUser: User = {
+            id: backendUser.user_id || backendUser.id,
+            email: backendUser.email,
+            profile: backendUser.profile
+        };
+        localStorage.setItem("user", JSON.stringify(appUser))
         
-        setUser(user)
+        setUser(appUser)
         router.push("/dashboard")
       } else {
-        // Si el registro es exitoso pero requiere login separado
+        // Si el registro es exitoso pero requiere login separado (el backend de FastAPI
+        // devuelve el user_id y email, que la API route de Next.js reenvía)
         router.push("/login?registered=true")
       }
     } catch (error: any) {
@@ -139,18 +156,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const logout = () => {
-    // Eliminar tokens y datos de usuario
     localStorage.removeItem("accessToken")
     localStorage.removeItem("refreshToken")
     localStorage.removeItem("user")
-    
-    // Eliminar token de los headers de axios
     delete axios.defaults.headers.common["Authorization"]
-    
-    // Actualizar estado
     setUser(null)
-    
-    // Redireccionar a login
     router.push("/login")
   }
 
