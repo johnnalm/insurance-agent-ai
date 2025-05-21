@@ -340,6 +340,11 @@ export default function PolicyChat({ policyTitle, isNew = false, onApplyChanges,
         requestBody.document_url = documentContext.url;
       }
 
+      // Add currentPolicyText if available
+      if (currentPolicyText) {
+        requestBody.current_policy_text = currentPolicyText;
+      }
+
       const response = await fetch("/api/internal/answer_query", {
         method: "POST",
         headers: {

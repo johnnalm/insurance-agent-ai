@@ -1,9 +1,11 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 class QueryRequest(BaseModel):
     query: str
-    thread_id: str | None = None
+    thread_id: Optional[str] = None
+    user_id: Optional[str] = None
+    current_policy_text: Optional[str] = None
     document_url: str | None = None
 
 class QueryResponse(BaseModel):

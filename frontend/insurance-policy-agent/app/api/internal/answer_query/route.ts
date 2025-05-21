@@ -6,7 +6,7 @@ const ANSWER_QUERY_ENDPOINT = new URL("/api/internal/v1/answer_query", BASE_FAST
 
 export async function POST(request: Request) {
   try {
-    const { query, thread_id, document_url } = await request.json();
+    const { query, thread_id, document_url, current_policy_text } = await request.json();
 
     if (!query) {
       return NextResponse.json({ detail: 'Query is required' }, { status: 400 });
@@ -22,6 +22,9 @@ export async function POST(request: Request) {
     }
     if (document_url) { // Include document_url if present
         bodyToFastAPI.document_url = document_url;
+    }
+    if (current_policy_text) { // Include current_policy_text if present
+        bodyToFastAPI.current_policy_text = current_policy_text;
     }
 
     const fastApiResponse = await fetch(ANSWER_QUERY_ENDPOINT, {

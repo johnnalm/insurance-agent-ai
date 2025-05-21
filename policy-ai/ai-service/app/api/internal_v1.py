@@ -37,7 +37,7 @@ def answer_query(request: QueryRequest):
         if request.document_url:
             config["document_context"] = {"url": request.document_url}
             
-        answer = get_agent_response(request.query, config=config)
+        answer = get_agent_response(request.query, current_policy_text=request.current_policy_text, config=config)
         return QueryResponse(answer=answer)
     except Exception as e:
         # Log the error e
