@@ -4,76 +4,68 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 240 10% 3.9%;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --highlight-yellow: 45 93% 47%;
-    --highlight-purple: 250 95% 64%;
-    --highlight-blue: 213 94% 68%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-
-    --radius: 1rem;
+    --radius: 0.5rem;
 
     --addition: 142.1 76.2% 36.3%;
     --deletion: 0 84.2% 60.2%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --highlight-yellow: 45 93% 47%;
-    --highlight-purple: 250 95% 64%;
-    --highlight-blue: 213 94% 68%;
-
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 215 20.2% 65.1%;
   }
 }
 
@@ -92,6 +84,49 @@
   h6 {
     @apply font-medium tracking-tight;
   }
+}
+
+/* Custom styles for diff highlighting */
+ins {
+  background-color: #d4edda; /* Light green */
+  color: #155724; /* Dark green */
+  text-decoration: none;
+  padding: 0.1em;
+  border-radius: 0.2em;
+}
+
+del {
+  background-color: #f8d7da; /* Light red */
+  color: #721c24; /* Dark red */
+  text-decoration: line-through;
+  padding: 0.1em;
+  border-radius: 0.2em;
+}
+
+/* Custom scrollbar for Tiptap editor area if needed */
+.custom-scrollbar ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar ::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar ::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+.editor-scroll-container .ProseMirror {
+    height: 100%; 
+    min-height: 400px; /* Or whatever min-height suits your layout */
+    overflow-y: auto; /* Make sure the ProseMirror editor itself can scroll if content overflows */
 }
 
 .bubble {
@@ -195,4 +230,82 @@
 .policy-document th,
 .policy-document td {
   @apply border p-2;
+}
+
+/* Styles for react-diff-viewer */
+.diff-viewer-wrapper {
+  /* You can add any wrapper styles if needed */
+}
+
+.diff-viewer-line {
+  /* Styles for each line in the diff */
+}
+
+.diff-viewer-line pre { /* Target pre tags within the diff viewer lines */
+  margin: 0 !important; /* Override any default pre margins */
+  white-space: pre-wrap !important; /* Ensure text wraps */
+  word-break: break-all !important; /* Break long words if necessary */
+}
+
+/* Added lines */
+.diff-added {
+  background-color: #e6ffed;
+  color: #24292e;
+}
+.diff-added .diff-gutter-col { /* Gutter for added lines */
+  background-color: #cdffd8;
+}
+.diff-added .diff-marker { /* Marker for added lines */
+  color: #24292e;
+}
+.word-added {
+  background-color: #acf2bd;
+  padding: 0.1em 0.2em;
+  border-radius: 0.2em;
+}
+
+/* Removed lines */
+.diff-removed {
+  background-color: #ffeef0;
+  color: #24292e;
+  text-decoration: line-through;
+}
+.diff-removed .diff-gutter-col { /* Gutter for removed lines */
+  background-color: #ffdce0;
+}
+.diff-removed .diff-marker { /* Marker for removed lines */
+  color: #24292e;
+}
+.word-removed {
+  background-color: #fdb8c0;
+  text-decoration: line-through;
+  padding: 0.1em 0.2em;
+  border-radius: 0.2em;
+}
+
+/* Gutter styles */
+.diff-gutter-col {
+  background-color: #f7f7f7;
+  color: #212529;
+}
+
+/* Line numbers and markers */
+.diff-line-number {
+  color: #212529;
+}
+.diff-marker {
+  font-family: monospace;
+}
+
+/* Ensure ins and del tags are also styled if used by the component */
+ins.diff-code-insert, span.diff-code-insert { /* More specific selectors */
+  background-color: #e6ffed !important;
+  color: #24292e !important;
+  text-decoration: none !important;
+}
+
+del.diff-code-delete, span.diff-code-delete { /* More specific selectors */
+  background-color: #ffeef0 !important;
+  color: #24292e !important;
+  text-decoration: line-through !important;
 }

@@ -7,12 +7,15 @@ import magic
 import logging
 from datetime import datetime
 
-from app.ai.rag_agent import get_agent_response
-from app.schemas.internal_api import QueryRequest, QueryResponse
+from app.ai.rag_agent import get_agent_response, generate_policy_draft, edit_policy
+from app.schemas.internal_api import QueryRequest, QueryResponse, PolicyDraftRequest, PolicyDraftResponse, PolicyEditRequest, PolicyEditResponse
 from app.services.document_processor import process_s3_documents
 from app.services.storage_service import upload_pdf_to_supabase
 
 router = APIRouter()
+
+# Configure logging for this module
+logger = logging.getLogger(__name__)
 
 @router.post("/answer_query", response_model=QueryResponse)
 def answer_query(request: QueryRequest):
@@ -111,3 +114,45 @@ async def upload_pdf_document(
     except Exception as e:
         logging.error(f"Error uploading PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# --- Policy Creation and Editing Endpoints ---
+
+@router.post("/generate-policy-draft", response_model=PolicyDraftResponse)
+async def generate_draft_endpoint(request: PolicyDraftRequest):
+    """
+    Receives a prompt and optionally the current policy text. 
+    Returns a generated policy draft, possibly diffed against the current text.
+    """
+    logger.info(f"Received request to generate policy draft. Prompt: {request.prompt[:100]}... Current text provided: {request.current_policy_text is not None}")
+    try:
+        draft_text = generate_policy_draft(request.prompt, request.current_policy_text)
+        if "<p>Error:" in draft_text: # Check for error snippet more robustly
+            logger.error(f"Failed to generate policy draft: {draft_text}")
+            raise HTTPException(status_code=500, detail=draft_text)
+        logger.info(f"Policy draft (or diff) generated successfully. Returning to client. Length: {len(draft_text)}")
+        return PolicyDraftResponse(draft_text=draft_text)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in generate-policy-draft endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate policy draft.")
+
+@router.post("/edit-policy", response_model=PolicyEditResponse)
+async def edit_policy_endpoint(request: PolicyEditRequest):
+    """
+    Receives current policy text and an edit instruction, 
+    returns an HTML diff of the modified policy text against the current text.
+    """
+    logger.info(f"Received request to edit policy. Instruction: {request.edit_instruction[:100]}...")
+    try:
+        edited_text_diff = edit_policy(request.current_policy_text, request.edit_instruction)
+        if "<p>Error:" in edited_text_diff: # Check for error snippet more robustly
+            logger.error(f"Failed to edit policy and generate diff: {edited_text_diff}")
+            raise HTTPException(status_code=500, detail=edited_text_diff)
+        logger.info(f"Policy edit diff generated successfully. Returning to client. Length: {len(edited_text_diff)}")
+        return PolicyEditResponse(edited_policy_text=edited_text_diff)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in edit-policy endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to edit policy.")

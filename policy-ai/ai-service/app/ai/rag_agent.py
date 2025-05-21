@@ -3,6 +3,8 @@ import logging
 from typing import Annotated, Optional, List
 import json
 
+from bs4 import BeautifulSoup
+from htmldiff2 import render_html_diff
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -16,7 +18,7 @@ from app.utils.pdf_processor import download_pdf_content, extract_text_from_pdf
 load_dotenv()
 
 # Setup basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Print the API key for debugging
@@ -25,6 +27,127 @@ logger.info(f"OpenAI API Key Loaded: '{os.getenv('OPENAI_API_KEY')[:5]}...'") # 
 # --- LangGraph Agent Setup ---
 
 llm = ChatOpenAI(model="gpt-4o", temperature=0, streaming=True)
+
+# --- New Functions for Policy Generation and Editing ---
+
+def generate_policy_draft(user_prompt: str, current_policy_text: Optional[str] = None) -> str:
+    """
+    Generates an initial insurance policy draft based on the user's prompt, outputting clean, well-formed HTML.
+    If current_policy_text is provided, it will return a diff of the generated draft against current_policy_text.
+    """
+    logger.info(f"Generating policy draft (HTML) for prompt: {user_prompt[:100]}...")
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are an AI assistant helping to draft insurance policies. "
+         "Based on the user\'s request, generate a comprehensive initial draft for an insurance policy strictly in well-formed HTML format. "
+         "User request: '{user_request}'. "
+         "Your output MUST be a single, valid HTML string, and NOTHING ELSE. "
+         "Key HTML Structure Rules: "
+         "1. Use standard HTML tags: <h2>, <h3>, <h4> for headings; <p> for paragraphs; <ul>, <ol>, <li> for lists; <strong> for bold; <em> for italic. "
+         "2. ABSOLUTELY CRITICAL: ALL HTML tags MUST be correctly opened and closed (e.g., <h2>Title</h2>, NOT <h2>Title</h3> or <p>Text<h3>Section</h3></p>). Pay meticulous attention to heading levels and ensure they are distinct elements. "
+         "3. CRITICAL: Section titles or heading-like phrases (e.g., \"Sección 1: Cobertura\") MUST be in their own dedicated heading tags (e.g., <h3>Sección 1: Cobertura</h3>). DO NOT embed section titles or other heading tags within <p> tags. Each heading must be standalone. "
+         "4. Ensure text content within tags is coherent. Avoid jumbling unrelated sentences or phrases within a single tag. If content represents different ideas, use separate appropriate tags. "
+         "5. STRICTLY FORBIDDEN: DO NOT include any markdown syntax (like ## or *) in the HTML output. "
+         "6. STRICTLY FORBIDDEN: DO NOT include any code fence markers like ```html, ```, or any other text outside the main HTML structure. The response must start directly with the first HTML tag (e.g., <h2>) and end with the last closing tag. "
+         "7. DO NOT output any explanatory text before or after the HTML. The entire response must be the HTML itself. "
+         "8. VERY IMPORTANT: Ensure that distinct pieces of information are in distinct HTML elements. For example, a main title and a subtitle should be in separate tags (e.g., <h2>Main Title</h2><h4>Subtitle</h4>) OR clearly separated if in the same tag. DO NOT concatenate them like '<h2>Main TitleSubtitle</h2>'. Similarly, a paragraph must fully close before a new heading begins. Do not run paragraph text directly into a heading tag or vice-versa (e.g. AVOID: <p>end of paragraph<h3>Heading Start</h3></p> or <p>Paragraph<h3>Nested Heading</h3> Text</p>). Headings (h2, h3, h4) must always be on their own line and be distinct elements. "
+         "Example of a good structure: "
+         "<h2>Main Policy Title</h2>"
+         "<h3>Section A Title</h3>"
+         "<p>Paragraph about section A.</p>"
+         "<ul><li>Item 1</li><li>Item 2</li></ul>"
+         "<h3>Section B Title</h3>"
+         "<p>Paragraph about section B.</p>"
+         "Respond ONLY with the HTML content, starting with <h2> and ending with the final closing tag."
+         ),
+        ("human", "{user_request}")
+    ])
+    
+    chain = prompt_template | llm
+    try:
+        response = chain.invoke({"user_request": user_prompt})
+        draft_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Forcefully remove known problematic markers
+        draft_text = draft_text.replace("```html", "").replace("```", "")
+        # Attempt to strip any leading/trailing whitespace that might remain
+        draft_text = draft_text.strip()
+
+        # Clean with BeautifulSoup
+        try:
+            soup = BeautifulSoup(draft_text, 'html.parser')
+            # Convert back to string. soup.prettify() can add newlines, 
+            # and does more aggressive cleaning.
+            cleaned_draft_text = soup.prettify() # Use a different variable for the cleaned version
+            logger.info(f"HTML Policy draft after BeautifulSoup prettify. Length: {len(cleaned_draft_text)}")
+            logger.debug(f"--- Prettified HTML Start ---\n{cleaned_draft_text}\n--- Prettified HTML End ---") # DETAILED LOGGING
+        except Exception as bs_error:
+            logger.error(f"BeautifulSoup cleaning error: {bs_error}", exc_info=True)
+            cleaned_draft_text = draft_text # Fallback to the uncleaned (but marker-stripped) text if BS fails
+
+        logger.info(f"HTML Policy draft generated successfully. Original Length: {len(draft_text)}, Cleaned Length: {len(cleaned_draft_text)}")
+
+        if current_policy_text and current_policy_text.strip() != cleaned_draft_text.strip():
+            logger.info("Current policy text provided, generating diff.")
+            diffed_html = render_html_diff(current_policy_text, cleaned_draft_text)
+            logger.info(f"Diff generated. Length: {len(diffed_html)}")
+            return diffed_html
+        else:
+            logger.info("No current policy text or no changes, returning cleaned draft.")
+            return cleaned_draft_text
+    except Exception as e:
+        logger.error(f"Error generating HTML policy draft: {e}", exc_info=True)
+        return "<p>Error: Could not generate policy draft.</p>"
+
+def edit_policy(current_policy_text: str, edit_instruction: str) -> str:
+    """
+    Edits an existing insurance policy (in HTML format) based on the user's instruction, 
+    returning an HTML diff of the changes.
+    """
+    logger.info(f"Editing HTML policy based on instruction: {edit_instruction[:100]}...")
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are an AI assistant helping to edit an existing insurance policy, which is provided in HTML format. "
+         "The user wants to make the following change: '{edit_instruction}'. "
+         "Apply this change to the provided HTML policy text. "
+         "Your output MUST be a single, valid HTML string representing the FULL modified policy. "
+         "Key HTML Structure Rules for Editing: "
+         "1. CRITICAL: ALL HTML tags (both existing and new) MUST be correctly opened and closed (e.g., <p>Text</p>). "
+         "2. Preserve the existing HTML structure as much as possible. Only change what is necessary based on the edit instruction. "
+         "3. If adding new section titles or heading-like phrases, they MUST be in their own heading tags (e.g., <h3>New Section</h3>). DO NOT put new section titles inside <p> tags. "
+         "4. Ensure text content within tags is coherent. "
+         "5. DO NOT introduce any markdown syntax (like ## or *) in the HTML output. "
+         "6. DO NOT include any ```html ... ``` markers or any text outside the main HTML structure. "
+         "Respond ONLY with the full modified HTML content. "
+         "\\n\\nExisting Policy (HTML):\\n{policy_text}"),
+        ("human", "Please apply the edit: '{edit_instruction}' to the HTML policy provided in the system message.")
+    ])
+
+    chain = prompt_template | llm
+    try:
+        response = chain.invoke({
+            "policy_text": current_policy_text,
+            "edit_instruction": edit_instruction
+        })
+        edited_text_raw = response.content if hasattr(response, 'content') else str(response)
+        logger.info(f"Raw edited HTML policy received from LLM. Length: {len(edited_text_raw)}")
+
+        # Clean with BeautifulSoup before diffing
+        try:
+            soup = BeautifulSoup(edited_text_raw, 'html.parser')
+            cleaned_edited_text = soup.prettify()
+            logger.info(f"Cleaned edited HTML with BeautifulSoup. Length: {len(cleaned_edited_text)}")
+        except Exception as bs_error:
+            logger.error(f"BeautifulSoup cleaning error on edited text: {bs_error}", exc_info=True)
+            cleaned_edited_text = edited_text_raw # Fallback
+
+        # Compute the diff
+        diffed_html = render_html_diff(current_policy_text, cleaned_edited_text)
+        logger.info(f"Diff generated for edited policy. Length: {len(diffed_html)}")
+        return diffed_html
+    except Exception as e:
+        logger.error(f"Error editing HTML policy or generating diff: {e}", exc_info=True)
+        return "<p>Error: Could not edit policy or generate diff.</p>"
 
 # --- Define structured output model ---
 class PolicyAnalysisOutput(BaseModel):
