@@ -170,11 +170,12 @@ else:
 
 ANALYSIS_QUERY_TEXT = "Analiza esta póliza, detallando fortalezas, debilidades y recomendaciones."
 
-def get_agent_response(query: str, config: dict = None) -> str:
+def get_agent_response(query: str, current_policy_text: Optional[str] = None, config: dict = None) -> str:
     """
     Gets a response from the LangGraph agent for the given query.
     If the query is the specific analysis query with a document_url,
     it returns a structured JSON analysis. Otherwise, it uses the conversational agent.
+    Optionally, current_policy_text can be provided to give context to the agent.
     """
     if not agent_executor and query != ANALYSIS_QUERY_TEXT:
         if query != ANALYSIS_QUERY_TEXT: # Allow analysis query even if main agent fails, but log
@@ -189,6 +190,11 @@ def get_agent_response(query: str, config: dict = None) -> str:
 
     if config is None:
         config = {}
+    
+    # Ensure 'configurable' and 'thread_id' are initialized in config
+    config.setdefault("configurable", {}).setdefault("thread_id", "default_thread")
+    if config["configurable"]["thread_id"] == "default_thread":
+        logger.warning(f"Using default thread_id for conversational agent: {config['configurable']['thread_id']}")
     
     if query == ANALYSIS_QUERY_TEXT and "document_context" in config and "url" in config["document_context"]:
         doc_url = config["document_context"]["url"]
@@ -257,14 +263,11 @@ def get_agent_response(query: str, config: dict = None) -> str:
         logger.error("Agent executor is not available for conversational query after analysis attempt.")
         return "Error: El agente de conversación no está disponible."
 
-    config.setdefault("configurable", {}).setdefault("thread_id", "default_thread")
-    if config["configurable"]["thread_id"] == "default_thread":
-        logger.warning(f"Using default thread_id for conversational agent: {config['configurable']['thread_id']}")
-
     actual_query_for_agent = query
     document_context_info = ""
 
-    if "document_context" in config and "url" in config["document_context"]:
+    # Specific Document Q&A (via URL) takes precedence
+    if "document_context" in config and "url" in config["document_context"] and not (query == ANALYSIS_QUERY_TEXT): # analysis query handled above
         doc_url = config["document_context"]["url"]
         actual_query_for_agent = (
             f"The user's query is: '{query}'.\\n"
@@ -277,10 +280,21 @@ def get_agent_response(query: str, config: dict = None) -> str:
         )
         document_context_info = f" with document_url: {doc_url}"
         logger.info(f"Conversational agent will be invoked with a highly directive query for specific_document_qa_tool. User query: '{query}', Doc URL: {doc_url}")
+    # General query with current_policy_text context
+    elif current_policy_text and not (query == ANALYSIS_QUERY_TEXT and "document_context" in config): # Exclude analysis query which has its own context handling
+        actual_query_for_agent = (
+            f"The user's query is: '{query}'.\\n"
+            f"They are currently working on the following insurance policy document. Use this document as the primary context for your response:\\n"
+            f"--- POLICY DOCUMENT START ---\\n{current_policy_text}\\n--- POLICY DOCUMENT END ---\\n"
+            f"Please respond to the user's query based on this context. If the query is a request for modification, explain what you would change or provide the change directly. If it's a question, answer it based on the document."
+        )
+        document_context_info = " with current policy text context"
+        logger.info(f"Conversational agent will be invoked with user query AND current policy context. Query: '{query}'")
+    # General query without specific document or policy text context
     else:
-        logger.info(f"Conversational agent will be invoked for a general query (no specific document_url). User query: '{query}'")
+        logger.info(f"Conversational agent will be invoked for a general query (no specific document_url or policy_text). User query: '{query}'")
     
-    logger.info(f"Invoking conversational agent. Effective query for agent: '{actual_query_for_agent}'{document_context_info}, Config: {config}")
+    logger.info(f"Invoking conversational agent. Effective query for agent: '{actual_query_for_agent[:500]}...'{document_context_info}, Config: {config}")
 
     try:
         final_state = agent_executor.invoke(
