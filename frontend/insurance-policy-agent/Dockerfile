@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
+# List contents of react-diff-viewer to debug CSS path
+# RUN ls -R /app/node_modules/react-diff-viewer
+
 # Copy the rest of the application code
 COPY . .
 

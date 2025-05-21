@@ -10,7 +10,8 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Instala dependencias del sistema si fueran necesarias (ej. para algunas librerías C)
-RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 && rm -rf /var/lib/apt/lists/*
+# We still need git for other potential pip git installs, but not for htmldiff specifically now.
+RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 git && rm -rf /var/lib/apt/lists/*
 
 # Copia el archivo de requerimientos primero para aprovechar el caché de Docker
 COPY requirements.txt .

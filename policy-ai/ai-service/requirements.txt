@@ -22,3 +22,7 @@ evaluate
 pytest
 python-magic
 supabase
+beautifulsoup4
+htmldiff2 # Replaced htmldiff with htmldiff2
+genshi
+html5lib
